@@ -1,9 +1,8 @@
 package dump
 
 import (
-	"database/sql"
-	"fmt"
-	"github.com/JamesStewy/go-mysqldump"
+	"github.com/siddontang/go-mysql/canal"
+	"github.com/siddontang/go-mysql/client"
 	"log"
 	"os"
 )
@@ -32,40 +31,74 @@ func prepareDir(dirName string) {
 	}
 }
 
+type MyEventHandler struct {
+	canal.DummyEventHandler
+}
+
+func (h *MyEventHandler) OnRow(e *canal.RowsEvent) error {
+	log.Printf("%s %v\n", e.Action, e.Rows)
+	return nil
+}
+
+func FetchMetaInfo() {
+	log.Printf("fetch")
+	conn, err := client.Connect("127.0.0.1:3306", "canal", "123456", "test")
+	if err != nil {
+		log.Fatal("error: ", err)
+	}
+
+	err = conn.Ping()
+	if err != nil {
+		log.Fatal("failed to ping")
+	}
+
+	// Insert
+	r, queryError := conn.Execute(`select COLUMN_NAME,DATA_TYPE,COLUMN_COMMENT 
+from information_schema.COLUMNS where table_name = 'entity_basic_info' and table_schema = 'test'`)
+	if queryError != nil {
+		log.Fatal("error: ", queryError)
+	}
+	log.Print(r)
+}
+
 func Dump() {
 
+
+
+
 	// Open connection to database
-	username := "root"
-	password := "123456"
-	hostname := "localhost"
-	port := "3306"
-	dbname := "test"
+	//username := "root"
+	//password := "123456"
+	//hostname := "localhost"
+	//port := "3306"
+	//dbname := "test"
 
 	dumpDir := "dumps"  // you should create this directory
 	prepareDir(dumpDir)
-	dumpFilenameFormat := fmt.Sprintf("%s-20060102T150405", dbname)   // accepts time layout string and add .sql at the end of file
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", username, password, hostname, port, dbname))
+	cfg := canal.NewDefaultConfig()
+	cfg.Addr = "127.0.0.1:3306"
+	cfg.User = "canal"
+	cfg.Password = "123456"
+	// We only care table canal_test in test db
+	cfg.Dump.TableDB = "test"
+	cfg.Dump.Tables = []string{"entity_basic_info"}
+
+
+	c, err := canal.NewCanal(cfg)
 	if err != nil {
-		fmt.Println("Error opening database: ", err)
-		return
+		log.Fatal("failed to open canal!")
 	}
 
-	// Register database with mysqldump
-	dumper, err := mysqldump.Register(db, dumpDir, dumpFilenameFormat)
-	if err != nil {
-		fmt.Println("Error registering databse:", err)
-		return
-	}
 
-	// Dump database to file
-	resultFilename, err := dumper.Dump()
-	if err != nil {
-		fmt.Println("Error dumping:", err)
-		return
-	}
-	fmt.Printf("File is saved to %s", resultFilename)
 
-	// Close dumper and connected database
-	dumper.Close()
+	//func (h *MyEventHandler) String() string {
+	//	return "MyEventHandler"
+	//}
+
+	// Register a handler to handle RowsEvent
+	c.SetEventHandler(&MyEventHandler{})
+
+	// Start canal
+	c.Run()
 }

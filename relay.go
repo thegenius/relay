@@ -2,18 +2,13 @@ package main
 
 import (
 	_ "github.com/go-sql-driver/mysql"
-	"log"
-	"relay/command"
 	"relay/dump"
 )
 
 func main() {
-	commandArgs := command.ParseArgs()
-	log.Println("args: ", commandArgs)
+	//commandArgs := command.ParseArgs()
+	//log.Println("args: ", commandArgs)
 
-	dump.Dump()
+	dump.FetchMetaInfo()
 }
 
-//func main() {
-
-//}
